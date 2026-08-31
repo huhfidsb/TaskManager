@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <!-- スマホアプリのように表示するための設定 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>絶対忘れないタスク</title>
+    <style>
+        :root {
+            --bg-color: #f2f2f7;
+            --card-bg: #ffffff;
+            --text-main: #1c1c1e;
+            --text-sub: #8e8e93;
+            --accent: #007aff;
+            --danger: #ff3b30;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding-bottom: 50px;
+        }
+
+        /* 期限7日以内の常駐バナー（画面上部に固定） */
+        #urgent-container {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: var(--danger);
+            color: white;
+            box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
+            display: none; /* タスクがない時は非表示 */
+        }
+        .urgent-task {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+        .urgent-task:last-child { border-bottom: none; }
+        .countdown-badge {
+            background: white;
+            color: var(--danger);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+
+        /* メインコンテンツ */
+        .container { padding: 20px; }
+        h1 { font-size: 24px; margin-bottom: 20px; }
+
+        /* 入力フォーム */
+        .form-group {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #e5e5ea;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:active { opacity: 0.8; }
+
+        /* 通常のタスクリスト */
+        .task-list { list-style: none; }
+        .task-item {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .task-info h3 { font-size: 16px; margin-bottom: 4px; }
+        .task-info p { font-size: 14px; color: var(--text-sub); }
+        .delete-btn {
+            background-color: #e5e5ea;
+            color: var(--danger);
+            width: auto;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 7日以内タスクの常駐アラート（画面上部に固定） -->
+    <div id="urgent-container">
+        <!-- JSでここにアラートが追加されます -->
+    </div>
+
+    <div class="container">
+        <h1>タスク管理</h1>
+        
+        <!-- タスク追加フォーム -->
+        <div class="form-group">
+            <input type="text" id="task-name" placeholder="課題やタスクの名前" required>
+            <input type="date" id="task-date" required>
+            <button onclick="addTask()">タスクを追加</button>
+        </div>
+
+        <!-- 全タスク一覧 -->
+        <h2>すべてのタスク</h2>
+        <ul id="task-list" class="task-list">
+            <!-- JSでここにタスクが追加されます -->
+        </ul>
+    </div>
+
+    <script>
+        // タスクを保存する配列
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+
+        // 日付から残り日数を計算する関数
+        function calculateDaysRemaining(deadlineStr) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // 今日の深夜0時にリセット
+            const deadline = new Date(deadlineStr);
+            deadline.setHours(0, 0, 0, 0);
+            
+            const diffTime = deadline - today;
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        // 画面の描画処理
+        function renderTasks() {
+            const listElement = document.getElementById('task-list');
+            const urgentContainer = document.getElementById('urgent-container');
+            
+            listElement.innerHTML = '';
+            urgentContainer.innerHTML = '';
+            
+            // 期限順に並び替え
+            tasks.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            let hasUrgent = false;
+
+            tasks.forEach((task, index) => {
+                const daysRemaining = calculateDaysRemaining(task.date);
+                
+                // --- 1. 通常リストの描画 ---
+                const li = document.createElement('li');
+                li.className = 'task-item';
+                li.innerHTML = `
+                    <div class="task-info">
+                        <h3>${task.name}</h3>
+                        <p>期限: ${task.date} (あと ${daysRemaining} 日)</p>
+                    </div>
+                    <button class="delete-btn" onclick="deleteTask(${index})">完了</button>
+                `;
+                listElement.appendChild(li);
+
+                // --- 2. 7日以内の常駐バナーの描画 ---
+                if (daysRemaining >= 0 && daysRemaining <= 7) {
+                    hasUrgent = true;
+                    const urgentDiv = document.createElement('div');
+                    urgentDiv.className = 'urgent-task';
+                    
+                    let badgeText = daysRemaining === 0 ? "本日が期限です！" : `あと ${daysRemaining} 日`;
+                    
+                    urgentDiv.innerHTML = `
+                        <span>⚠️ ${task.name}</span>
+                        <span class="countdown-badge">${badgeText}</span>
+                    `;
+                    urgentContainer.appendChild(urgentDiv);
+                }
+            });
+
+            // 7日以内のタスクがある場合のみバナーを表示
+            urgentContainer.style.display = hasUrgent ? 'block' : 'none';
+            
+            // ローカルストレージに保存
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        // タスクの追加
+        function addTask() {
+            const nameInput = document.getElementById('task-name');
+            const dateInput = document.getElementById('task-date');
+
+            if (nameInput.value === '' || dateInput.value === '') {
+                alert('タスク名と期限を入力してください。');
+                return;
+            }
+
+            tasks.push({
+                name: nameInput.value,
+                date: dateInput.value
+            });
+
+            nameInput.value = '';
+            dateInput.value = '';
+            
+            renderTasks();
+        }
+
+        // タスクの削除（完了）
+        function deleteTask(index) {
+            tasks.splice(index, 1);
+            renderTasks();
+        }
+
+        // 初回読み込み時の描画
+        renderTasks();
+    </script>
+</body>
+</html>
