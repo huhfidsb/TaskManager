@@ -7,30 +7,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>絶対忘れないタスク</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .back-btn { background-color: #76768033; color: var(--text-main); width: auto; padding: 6px 12px; font-size: 14px; border-radius: 8px; cursor: pointer; }
-        
-        /* ファイル（フォルダ）グリッド表示 */
-        .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-        .folder-card { background: var(--card-bg); border: 2px solid #e5e5ea; border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .folder-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-        .folder-icon { font-size: 28px; margin-bottom: 5px; }
-        .folder-title { font-weight: bold; font-size: 14px; word-break: break-all; }
-
-        .folder-add-box { display: flex; gap: 8px; margin-bottom: 20px; }
-        .folder-add-box input { margin-bottom: 0; }
-        .folder-add-box button { width: auto; padding: 0 15px; white-space: nowrap; }
-
-        .tab-section { display: flex; gap: 8px; margin-bottom: 15px; }
-        .tab-btn { background: #e5e5ea; color: var(--text-main); border: none; padding: 8px 14px; border-radius: 20px; font-size: 14px; cursor: pointer; }
-        .tab-btn.active { background: var(--accent); color: white; font-weight: bold; }
-        
-        .restore-btn { background-color: #e5f9e5; color: #34c759; }
-        .copy-btn { background-color: #e5f2ff; color: var(--accent); }
-        .section-title { font-size: 16px; margin: 20px 0 10px; color: #8e8e93; }
-    </style>
 </head>
 <body>
 
@@ -52,35 +30,39 @@
     <!-- 2. アプリ本体画面（ログイン後に表示） -->
     <div id="app-section" class="container" style="display: none;">
         
-        <!-- ヘッダーにログアウトボタンを追加 -->
+        <!-- ヘッダー（ユーザー表示 & ログアウト） -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <span id="user-email-display" style="font-size: 12px; color: #8e8e93;"></span>
             <button onclick="handleSignOut()" style="background-color: #e5e5ea; color: #333; width: auto; padding: 5px 10px; font-size: 12px;">ログアウト</button>
         </div>
-        
-        <!-- 7日以内タスクのアラート -->
+
+        <!-- 通知許可の案内バナー -->
+        <div id="notification-banner" style="background: #f0f0f7; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: #555;">🔔 期限7日前からの通知を受け取る</span>
+            <button onclick="requestNotificationPermission()" style="width: auto; padding: 5px 12px; font-size: 12px; background: var(--accent);">通知を許可</button>
+        </div>
+
+        <!-- 7日以内タスクのアラート表示エリア -->
         <div id="urgent-container"></div>
 
-        <!-- 1. トップ画面（ファイル一覧 ＆ ファイル外タスク） -->
+        <!-- トップ画面（ファイル一覧 ＆ ファイル無しのタスク） -->
         <div id="view-top">
-            <div class="header-bar">
+            <div class="header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h1>📁 ファイル一覧</h1>
             </div>
 
             <!-- ファイル作成フォーム -->
-            <div class="folder-add-box">
-                <input type="text" id="new-folder-name" placeholder="新しいファイル名（例：大学の課題）">
-                <button onclick="addFolder()">ファイル作成</button>
+            <div class="folder-add-box" style="display: flex; gap: 8px; margin-bottom: 20px;">
+                <input type="text" id="new-folder-name" placeholder="新しいファイル名（例：大学の課題）" style="margin-bottom: 0;">
+                <button onclick="addFolder()" style="width: auto; padding: 0 15px; white-space: nowrap;">ファイル作成</button>
             </div>
 
             <!-- ファイル一覧グリッド -->
-            <div id="folder-grid" class="folder-grid">
-                <!-- JSでここにファイルカードが並びます -->
-            </div>
+            <div id="folder-grid" class="folder-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
 
             <hr style="border: none; border-top: 1px solid #e5e5ea; margin: 30px 0;">
 
-            <!-- ファイルに入っていない単発タスクの追加・一覧 -->
+            <!-- ファイルに属さない単発タスク -->
             <div class="header-bar">
                 <h2>📝 ファイル無しのタスク</h2>
             </div>
@@ -95,21 +77,21 @@
             <ul id="unfiled-task-list" class="task-list"></ul>
         </div>
 
-
-        <!-- 2. ファイル詳細画面（ファイルの中身） -->
+        <!-- ファイル詳細画面（ファイルの中身） -->
         <div id="view-folder-detail" style="display: none;">
-            <div class="header-bar">
-                <button class="back-btn" onclick="closeFolder()">← ファイル一覧に戻る</button>
+            <div class="header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button class="back-btn" onclick="closeFolder()" style="background-color: #76768033; color: var(--text-main); width: auto; padding: 6px 12px; font-size: 14px; border-radius: 8px; cursor: pointer;">← ファイル一覧に戻る</button>
                 <h1 id="current-folder-title">ファイル名</h1>
+                <button onclick="deleteCurrentFolder()" style="background-color: #ff3b30; color: white; width: auto; padding: 6px 12px; font-size: 12px; border-radius: 8px;">ファイルを削除</button>
             </div>
 
             <!-- タスク状態タブ（未完了 / 完了履歴） -->
-            <div class="tab-section">
+            <div class="tab-section" style="display: flex; gap: 8px; margin-bottom: 15px;">
                 <button id="tab-active" class="tab-btn active" onclick="switchTab(false)">未完了</button>
                 <button id="tab-completed" class="tab-btn" onclick="switchTab(true)">完了履歴</button>
             </div>
             
-            <!-- タスク追加フォーム -->
+            <!-- ファイル内タスク追加フォーム -->
             <div id="task-form-group" class="form-group">
                 <input type="text" id="task-name" placeholder="このファイル内に追加するタスク名" required>
                 <input type="datetime-local" id="deadline" required>
@@ -123,336 +105,7 @@
 
     </div>
 
-    
+    <!-- 切り分けた外部JavaScriptファイルの読み込み -->
+    <script src="script.js"></script>
 </body>
-<script>
-    const SUPABASE_URL = 'https://sdoviywawxvyeecbrjep.supabase.co'; 
-    const SUPABASE_ANON_KEY = 'sb_publishable_t2aaxAOvsaVqUUkqiUGKaA_lLvRzsut';
-
-    let supabaseClient;
-    try {
-        const { createClient } = window.supabase;
-        supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } catch (e) {
-        console.error("Supabase初期化エラー", e);
-    }
-
-    let folders = [];
-    let folderTasks = [];
-    let unfiledTasks = [];
-    let currentFolder = null;
-    let isShowingCompleted = false;
-
-    // ページ読み込み時にログイン状態を判定
-    window.onload = async () => {
-        if (!supabaseClient) return;
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            showApp(session.user);
-        } else {
-            showAuth();
-        }
-    };
-
-    // --- 画面表示切り替え ---
-    function showApp(user) {
-        document.getElementById('auth-section').style.display = 'none';
-        document.getElementById('app-section').style.display = 'block';
-        if (user) {
-            document.getElementById('user-email-display').innerText = user.email;
-        }
-        fetchFolders();
-        fetchUnfiledTasks();
-    }
-
-    function showAuth() {
-        document.getElementById('auth-section').style.display = 'block';
-        document.getElementById('app-section').style.display = 'none';
-    }
-
-    // --- 認証機能 ---
-    async function handleSignUp() {
-        const email = document.getElementById('auth-email').value.trim();
-        const password = document.getElementById('auth-password').value;
-        if (!email || !password) return alert('メールアドレスとパスワードを入力してください。');
-
-        const { data, error } = await supabaseClient.auth.signUp({ email, password });
-        if (error) {
-            alert('登録エラー: ' + error.message);
-        } else {
-            alert('アカウントを作成しました！');
-            showApp(data.user);
-        }
-    }
-
-    async function handleSignIn() {
-        const email = document.getElementById('auth-email').value.trim();
-        const password = document.getElementById('auth-password').value;
-        if (!email || !password) return alert('メールアドレスとパスワードを入力してください。');
-
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) {
-            alert('ログインエラー: ' + error.message);
-        } else {
-            showApp(data.user);
-        }
-    }
-
-    async function handleSignOut() {
-        await supabaseClient.auth.signOut();
-        showAuth();
-    }
-
-    // --- フォルダ（ファイル詳細）画面切り替え ---
-    function openFolder(folder) {
-        currentFolder = folder;
-        document.getElementById('view-top').style.display = 'none';
-        document.getElementById('view-folder-detail').style.display = 'block';
-        document.getElementById('current-folder-title').innerText = '📁 ' + folder.name;
-        switchTab(false);
-    }
-
-    function closeFolder() {
-        currentFolder = null;
-        document.getElementById('view-top').style.display = 'block';
-        document.getElementById('view-folder-detail').style.display = 'none';
-        fetchFolders();
-        fetchUnfiledTasks();
-    }
-
-    // --- フォルダ操作 ---
-    async function fetchFolders() {
-        const { data, error } = await supabaseClient.from('folders').select('*').order('created_at', { ascending: true });
-        if (!error) {
-            folders = data || [];
-            renderFolders();
-        }
-    }
-
-    function renderFolders() {
-        const grid = document.getElementById('folder-grid');
-        grid.innerHTML = '';
-
-        if (folders.length === 0) {
-            grid.innerHTML = '<p style="color:#8e8e93; grid-column: 1/-1;">ファイルがまだありません。上のフォームから作成してください。</p>';
-            return;
-        }
-
-        folders.forEach(folder => {
-            const card = document.createElement('div');
-            card.className = 'folder-card';
-            card.onclick = () => openFolder(folder);
-            card.innerHTML = `
-                <div class="folder-icon">📁</div>
-                <div class="folder-title">${folder.name}</div>
-            `;
-            grid.appendChild(card);
-        });
-    }
-
-    // ★ ログインユーザーのIDを使ってファイル作成
-    async function addFolder() {
-        const input = document.getElementById('new-folder-name');
-        if (!input.value) return alert('ファイル名を入力してください。');
-
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return alert('ログインが必要です。');
-
-        const { error } = await supabaseClient.from('folders').insert([{ 
-            user_id: user.id, 
-            name: input.value 
-        }]);
-
-        if (error) alert('ファイル作成エラー: ' + error.message);
-        else {
-            input.value = '';
-            fetchFolders();
-        }
-    }
-
-    // --- タブ切り替え ---
-    function switchTab(showCompleted) {
-        isShowingCompleted = showCompleted;
-        document.getElementById('tab-active').classList.toggle('active', !showCompleted);
-        document.getElementById('tab-completed').classList.toggle('active', showCompleted);
-        document.getElementById('task-form-group').style.display = showCompleted ? 'none' : 'block';
-        document.getElementById('list-title').innerText = showCompleted ? '完了したタスクの履歴' : '未完了のタスク';
-        fetchFolderTasks();
-    }
-
-    // --- 日数計算 ---
-    function calculateDaysRemaining(deadlineStr) {
-        if (!deadlineStr) return 0;
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const deadline = new Date(deadlineStr); deadline.setHours(0, 0, 0, 0);
-        return Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-    }
-
-    // --- ファイル外（単発）タスク ---
-    async function fetchUnfiledTasks() {
-        const { data, error } = await supabaseClient
-            .from('tasks')
-            .select('*')
-            .is('folder_id', null)
-            .eq('is_completed', false)
-            .order('deadline', { ascending: true });
-
-        if (!error) {
-            unfiledTasks = data || [];
-            renderUnfiledTasks();
-        }
-    }
-
-    function renderUnfiledTasks() {
-        const listElement = document.getElementById('unfiled-task-list');
-        listElement.innerHTML = '';
-
-        unfiledTasks.forEach((task) => {
-            const daysRemaining = calculateDaysRemaining(task.deadline);
-            const li = document.createElement('li');
-            li.className = 'task-item';
-            const displayDeadline = task.deadline ? task.deadline.replace('T', ' ').slice(0, 16) : '';
-            const memoHtml = task.detail ? `<div class="task-memo">${task.detail}</div>` : '';
-
-            li.innerHTML = `
-                <div class="task-info">
-                    <h3>${task.title}</h3>
-                    <p>期限: ${displayDeadline} (あと ${daysRemaining} 日)</p>
-                    ${memoHtml}
-                </div>
-                <div class="task-actions">
-                    <button class="delete-btn" onclick="completeTask('${task.id}', true)">完了</button>
-                </div>`;
-            listElement.appendChild(li);
-        });
-    }
-
-    // ★ ログインユーザーのIDを使って単発タスク作成
-    async function addUnfiledTask() {
-        const titleInput = document.getElementById('top-task-name');
-        const deadlineInput = document.getElementById('top-deadline');
-        const detailInput = document.getElementById('top-task-detail');
-
-        if (!titleInput.value || !deadlineInput.value) return alert('タスク名と期限を入力してください。');
-
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return alert('ログインが必要です。');
-
-        const { error } = await supabaseClient.from('tasks').insert([{
-            user_id: user.id,
-            folder_id: null,
-            title: titleInput.value,
-            deadline: deadlineInput.value,
-            detail: detailInput.value
-        }]);
-
-        if (error) alert('追加エラー: ' + error.message);
-        else {
-            titleInput.value = ''; deadlineInput.value = ''; detailInput.value = '';
-            fetchUnfiledTasks();
-        }
-    }
-
-    // --- ファイル内タスク ---
-    async function fetchFolderTasks() {
-        if (!currentFolder) return;
-
-        const { data, error } = await supabaseClient
-            .from('tasks')
-            .select('*')
-            .eq('folder_id', currentFolder.id)
-            .eq('is_completed', isShowingCompleted)
-            .order('deadline', { ascending: true });
-
-        if (!error) {
-            folderTasks = data || [];
-            renderFolderTasks();
-        }
-    }
-
-    function renderFolderTasks() {
-        const listElement = document.getElementById('folder-task-list');
-        listElement.innerHTML = '';
-
-        folderTasks.forEach((task) => {
-            const daysRemaining = calculateDaysRemaining(task.deadline);
-            const li = document.createElement('li');
-            li.className = 'task-item';
-            const displayDeadline = task.deadline ? task.deadline.replace('T', ' ').slice(0, 16) : '';
-            const memoHtml = task.detail ? `<div class="task-memo">${task.detail}</div>` : '';
-
-            if (!isShowingCompleted) {
-                li.innerHTML = `
-                    <div class="task-info">
-                        <h3>${task.title}</h3>
-                        <p>期限: ${displayDeadline} (あと ${daysRemaining} 日)</p>
-                        ${memoHtml}
-                    </div>
-                    <div class="task-actions">
-                        <button class="delete-btn" onclick="completeTask('${task.id}', false)">完了</button>
-                    </div>`;
-            } else {
-                li.innerHTML = `
-                    <div class="task-info">
-                        <h3><s>${task.title}</s></h3>
-                        <p>完了日時: ${task.completed_at ? task.completed_at.replace('T', ' ').slice(0, 16) : '不明'}</p>
-                        ${memoHtml}
-                    </div>
-                    <div class="task-actions">
-                        <button class="restore-btn" onclick="restoreTask('${task.id}')">復元</button>
-                    </div>`;
-            }
-            listElement.appendChild(li);
-        });
-    }
-
-    // ★ ログインユーザーのIDを使ってファイル内タスク作成
-    async function addTask() {
-        const titleInput = document.getElementById('task-name');
-        const deadlineInput = document.getElementById('deadline');
-        const detailInput = document.getElementById('task-detail');
-
-        if (!titleInput.value || !deadlineInput.value) return alert('タスク名と期限を入力してください。');
-
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return alert('ログインが必要です。');
-
-        const { error } = await supabaseClient.from('tasks').insert([{
-            user_id: user.id,
-            folder_id: currentFolder.id,
-            title: titleInput.value,
-            deadline: deadlineInput.value,
-            detail: detailInput.value
-        }]);
-
-        if (error) alert('追加エラー: ' + error.message);
-        else {
-            titleInput.value = ''; deadlineInput.value = ''; detailInput.value = '';
-            fetchFolderTasks();
-        }
-    }
-
-    async function completeTask(taskId, isUnfiled) {
-        const { error } = await supabaseClient.from('tasks').update({
-            is_completed: true,
-            completed_at: new Date().toISOString()
-        }).eq('id', taskId);
-
-        if (error) alert('完了エラー: ' + error.message);
-        else {
-            if (isUnfiled) fetchUnfiledTasks();
-            else fetchFolderTasks();
-        }
-    }
-
-    async function restoreTask(taskId) {
-        const { error } = await supabaseClient.from('tasks').update({
-            is_completed: false,
-            completed_at: null
-        }).eq('id', taskId);
-
-        if (error) alert('復元エラー: ' + error.message);
-        else fetchFolderTasks();
-    }
-</script>
 </html>
